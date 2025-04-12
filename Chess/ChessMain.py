@@ -1,7 +1,7 @@
 import pygame as p
 import ChessEngine
 
-WIDTH = HEIGHT = 512
+WIDTH = HEIGHT = 680
 DIMENSION = 8
 SQSIZE = HEIGHT // DIMENSION
 MAX_FPS = 15
@@ -20,6 +20,8 @@ def main():
     screen.fill(p.Color("white"))
     gs = ChessEngine.GameState()
     loadImages() 
+    validMoves = gs.getValidMoves()
+    moveMade = False
     running = True
     sqSelected = ()
     playerClicks = []
@@ -27,6 +29,7 @@ def main():
         for e in p.event.get():
             if e.type == p.QUIT:
                 running = False
+
             elif e.type == p.MOUSEBUTTONDOWN: 
                 location = p.mouse.get_pos()
                 col = location[0] // SQSIZE
@@ -40,12 +43,23 @@ def main():
                 if len(playerClicks) == 2: 
                     move = ChessEngine.Move(playerClicks[0], playerClicks[1], gs.board)
                     print(move.getChessNotation())
-                    gs.makeMove(move)
+                    if move in validMoves:
+                        print(move.getChessNotation())
+                        gs.makeMove(move)
+                        moveMade = True
                     sqSelected = ()
                     playerClicks = []
 
+            elif e.type == p.KEYDOWN: 
+                if e.key == p.K_z: 
+                    gs.undoMove()
+                    sqSelected = ()
+                    playerClicks = []
+                    moveMade = True
+        if moveMade:
+            validMoves = gs.getValidMoves()
+            moveMade = False
 
-        
         drawGameState(screen, gs)
         clock.tick(MAX_FPS)
         p.display.flip()
@@ -55,7 +69,9 @@ def drawGameState(screen, gs):
     drawPieces(screen, gs.board)
 
 def drawBoard(screen):
-    colors = [p.Color("white"), p.Color("gray")]
+    light_color = p.Color("#f0d9b5")
+    dark_color = p.Color("#b58863")
+    colors = [light_color, dark_color]
     for r in range(DIMENSION):
         for c in range(DIMENSION):
             color = colors[((r + c) % 2)]
