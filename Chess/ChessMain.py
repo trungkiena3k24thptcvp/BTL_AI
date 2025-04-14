@@ -1,7 +1,7 @@
 import pygame as p
 import ChessEngine
 
-WIDTH = HEIGHT = 680
+WIDTH = HEIGHT = 480
 DIMENSION = 8
 SQSIZE = HEIGHT // DIMENSION
 MAX_FPS = 15
@@ -20,7 +20,7 @@ def main():
     screen.fill(p.Color("white"))
     gs = ChessEngine.GameState()
     loadImages() 
-    validMoves = gs.getValidMoves()
+    validMoves = gs.getAllValidMoves()
     moveMade = False
     running = True
     sqSelected = ()
@@ -57,7 +57,7 @@ def main():
                     playerClicks = []
                     moveMade = True
         if moveMade:
-            validMoves = gs.getValidMoves()
+            validMoves = gs.getAllValidMoves()
             moveMade = False
 
         drawGameState(screen, gs)
