@@ -111,11 +111,11 @@ class GameState():
                         self.getKingMoves(r, c, moves)
         return moves
 
-    def isCheck(self, kingPos, opponent_pieces):
+    def isCheck(self, kingPos, opponent_pieces): #co gi do sai sai
         # Kiểm tra tất cả các quân cờ đối phương để xem có quân nào có thể tấn công quân vua
         for piece in opponent_pieces:
             # Kiểm tra xem quân đối phương có thể di chuyển đến vị trí của quân vua không
-            possibleMoves = self.getAllPossibleMoves()  # chuyen thah ham getAllPossibleMoveIfChecked
+            possibleMoves = self.getAllPossibleMoves()  # chuyen thah ham getAllPossibleMoveIfChecked (chua co) // cai nay saiiiiiiii
             for move in possibleMoves:
                 if move.endRow == kingPos[0] and move.endCol == kingPos[1]:
                     return True
