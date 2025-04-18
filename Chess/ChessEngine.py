@@ -204,7 +204,7 @@ class GameState():
             moves = self.getAllPossibleMoves()
 
         if len(moves) == 0:
-            if self.inCheck():
+            if self.isInCheck():
                 self.checkmate = True
             else:
                 self.stalemate = True
