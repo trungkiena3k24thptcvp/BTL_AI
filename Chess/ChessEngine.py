@@ -1,5 +1,5 @@
-class GameState(): 
-    def __init__(self): 
+class GameState():
+    def __init__(self):
         self.board = [
             ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
             ["bp", "bp", "bp", "bp", "bp", "bp", "bp", "bp"],
@@ -14,7 +14,7 @@ class GameState():
         self.moveLog = []
         self.whiteKingLocation = (7, 4)
         self.blackKingLocation = (0, 4)
-        self.inCheck = False 
+        self.inCheck = False
         self.pins = []
         self.checks = []
         self.checkMate = False
@@ -22,16 +22,27 @@ class GameState():
 
     def makeMove(self, move):
         self.board[move.startRow][move.startCol] = "--"
-        self.board[move.endRow][move.endCol] = move.pieceMoved 
+
+        # Nếu quân tốt đi đến hàng cuối và cần phong cấp
+        if move.isPawnPromotion:
+            # Gọi hàm để người chơi chọn quân phong cấp
+            if self.promotePawn(move):
+                self.board[move.endRow][move.endCol] = move.pieceMoved[0] + move.promotionChoice
+            else:
+                return  # Nếu không hợp lệ, hủy bỏ nước đi
+        else:
+            self.board[move.endRow][move.endCol] = move.pieceMoved
+
         self.moveLog.append(move)
         self.whiteToMove = not self.whiteToMove
+
         if move.pieceMoved == 'wK':
             self.whiteKingLocation = (move.endRow, move.endCol)
         elif move.pieceMoved == 'bK':
             self.blackKingLocation = (move.endRow, move.endCol)
 
     def undoMove(self):
-        if len(self.moveLog) != 0: 
+        if len(self.moveLog) != 0:
             move = self.moveLog.pop()
             self.board[move.startRow][move.startCol] = move.pieceMoved
             self.board[move.endRow][move.endCol] = move.pieceCaptured
@@ -84,7 +95,7 @@ class GameState():
             if 0 <= x < 8 and 0 <= y < 8:  # Kiểm tra nếu di chuyển trong bàn cờ
                 if not piecePinned:
                     endPiece = self.board[x][y]
-                    if endPiece[0] != allyColor: 
+                    if endPiece[0] != allyColor:
                         moves.append(Move((r, c), (x, y), self.board))
 
     def getBishopMoves(self, r, c, moves):
@@ -115,7 +126,6 @@ class GameState():
                             break
                     else:
                         break
-                    
 
     def getQueenMoves(self, r, c, moves):
         # Hậu có thể di chuyển như Tượng hoặc Xe, nên kết hợp cả hai
@@ -168,7 +178,6 @@ class GameState():
                         self.getKingMoves(r, c, moves)
         return moves
 
-
     def getAllValidMoves(self):
         moves = []
         self.inCheck, self.pins, self.checks = self.checkForPinsAndChecks()
@@ -191,7 +200,7 @@ class GameState():
                 else:
                     for i in range(1, 8):
                         validSquare = (kingRow + check[2] * i, kingCol + check[3] * i)
-                        validSquares.append(validSquare) 
+                        validSquares.append(validSquare)
                         if validSquare[0] == checkRow and validSquare[1] == checkCol:
                             break
                 for i in range(len(moves) - 1, -1, -1):
@@ -227,7 +236,7 @@ class GameState():
             allyColor = "b"
             startRow = self.blackKingLocation[0]
             startCol = self.blackKingLocation[1]
-        directions = [(-1, 0), (0, -1), (1, 0), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)] 
+        directions = [(-1, 0), (0, -1), (1, 0), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]
         for j in range(len(directions)):
             d = directions[j]
             possiblePin = ()
@@ -244,9 +253,10 @@ class GameState():
                     elif endPiece[0] == enemyColor:
                         type = endPiece[1]
                         if (0 <= j <= 3 and type == 'R') or \
-                        (4 <= j <= 7 and type == 'B') or \
-                        (i == 1 and type == 'p' and ((enemyColor == 'w' and 6 <= j <= 7) or (enemyColor == 'b' and 4 <= j <= 5))) or \
-                        (type == 'Q') or (i == 1 and type == 'K'):
+                                (4 <= j <= 7 and type == 'B') or \
+                                (i == 1 and type == 'p' and (
+                                        (enemyColor == 'w' and 6 <= j <= 7) or (enemyColor == 'b' and 4 <= j <= 5))) or \
+                                (type == 'Q') or (i == 1 and type == 'K'):
                             if possiblePin == ():
                                 inCheck = True
                                 checks.append((endRow, endCol, d[0], d[1]))
@@ -272,12 +282,11 @@ class GameState():
             return self.squareUnderAttack(self.whiteKingLocation[0], self.whiteKingLocation[1])
         else:
             return self.squareUnderAttack(self.blackKingLocation[0], self.blackKingLocation[1])
-        
-        
+
     def squareUnderAttack(self, r, c):
         self.whiteToMove = not self.whiteToMove
         opponentMoves = self.getAllPossibleMoves()
-        self.whiteToMove = not self.whiteToMove 
+        self.whiteToMove = not self.whiteToMove
         for move in opponentMoves:
             if move.endRow == r and move.endCol == c:
                 return True
@@ -292,10 +301,18 @@ class GameState():
                 pinDirection = (self.pins[i][2], self.pins[i][3])
                 self.pins.remove(self.pins[i])
                 break
+
         if self.whiteToMove:
             if self.board[r - 1][c] == '--':
                 if not piecePinned or pinDirection == (-1, 0):
-                    moves.append(Move((r, c), (r - 1, c), self.board))
+                    if r - 1 == 0:  # Quân tốt đến hàng cuối
+                        # Tạo 4 lựa chọn phong cấp (Hậu, Xe, Tượng, Mã)
+                        moves.append(Move((r, c), (r - 1, c), self.board, 'Q'))  # Phong cấp thành Hậu
+                        moves.append(Move((r, c), (r - 1, c), self.board, 'R'))  # Phong cấp thành Xe
+                        moves.append(Move((r, c), (r - 1, c), self.board, 'B'))  # Phong cấp thành Tượng
+                        moves.append(Move((r, c), (r - 1, c), self.board, 'N'))  # Phong cấp thành Mã
+                    else:
+                        moves.append(Move((r, c), (r - 1, c), self.board))
                     if r == 6 and self.board[r - 2][c] == '--':
                         moves.append(Move((r, c), (r - 2, c), self.board))
             if c - 1 >= 0 and self.board[r - 1][c - 1][0] == 'b':
@@ -307,7 +324,13 @@ class GameState():
         else:
             if self.board[r + 1][c] == '--':
                 if not piecePinned or pinDirection == (1, 0):
-                    moves.append(Move((r, c), (r + 1, c), self.board))
+                    if r + 1 == 7:  # Quân tốt đến hàng cuối
+                        moves.append(Move((r, c), (r + 1, c), self.board, 'Q'))  # Phong cấp thành Hậu
+                        moves.append(Move((r, c), (r + 1, c), self.board, 'R'))  # Phong cấp thành Xe
+                        moves.append(Move((r, c), (r + 1, c), self.board, 'B'))  # Phong cấp thành Tượng
+                        moves.append(Move((r, c), (r + 1, c), self.board, 'N'))  # Phong cấp thành Mã
+                    else:
+                        moves.append(Move((r, c), (r + 1, c), self.board))
                     if r == 1 and self.board[r + 2][c] == '--':
                         moves.append(Move((r, c), (r + 2, c), self.board))
             if c - 1 >= 0 and self.board[r + 1][c - 1][0] == 'w':
@@ -316,29 +339,47 @@ class GameState():
             if c + 1 <= 7 and self.board[r + 1][c + 1][0] == 'w':
                 if not piecePinned or pinDirection == (1, 1):
                     moves.append(Move((r, c), (r + 1, c + 1), self.board))
-                
-            
-class Move():
 
+    def promotePawn(self, move):
+        # Yêu cầu người chơi chọn quân phong cấp
+        promotion_choice = input("Chọn quân phong cấp (Q = Hậu, R = Xe, B = Tượng, N = Mã): ").upper()
+
+        # Kiểm tra nếu lựa chọn hợp lệ
+        if promotion_choice not in ['Q', 'R', 'B', 'N']:
+            print("Lựa chọn không hợp lệ! Phải chọn Hậu (Q), Xe (R), Tượng (B), hoặc Mã (N).")
+            return False  # Trả về False nếu lựa chọn không hợp lệ
+
+        # Cập nhật quân phong cấp trong nước đi
+        move.promotionChoice = promotion_choice
+        return True
+
+
+class Move():
     ranksToRows = {"1": 7, "2": 6, "3": 5, "4": 4, "5": 3, "6": 2, "7": 1, "8": 0}
     rowsToRanks = {v: k for k, v in ranksToRows.items()}
     filesToCols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7}
     colsToFiles = {v: k for k, v in filesToCols.items()}
-    
-    def __init__(self, startSq, endSq, board):
+
+    def __init__(self, startSq, endSq, board, promotionChoice='Q'):
         self.startRow = startSq[0]
         self.startCol = startSq[1]
         self.endRow = endSq[0]
         self.endCol = endSq[1]
         self.pieceMoved = board[self.startRow][self.startCol]
         self.pieceCaptured = board[self.endRow][self.endCol]
-    
+        self.isPawnPromotion = False
+        self.promotionChoice = promotionChoice  # 'Q' for Queen, 'R' for Rook, 'B' for Bishop, 'N' for Knight
+
+        # Kiểm tra nếu quân tốt đi tới hàng cuối và cần phải phong cấp
+        if (self.pieceMoved == 'wp' and self.endRow == 0) or (self.pieceMoved == 'bp' and self.endRow == 7):
+            self.isPawnPromotion = True
+
     def getChessNotation(self):
         return self.getRankFile(self.startRow, self.startCol) + self.getRankFile(self.endRow, self.endCol)
 
     def getRankFile(self, r, c):
         return self.colsToFiles[c] + self.rowsToRanks[r]
-    
+
     def __eq__(self, other):
         return (self.startRow == other.startRow and
                 self.startCol == other.startCol and
