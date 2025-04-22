@@ -63,7 +63,7 @@ piece_position_scores = {"wN": knight_scores,
 
 CHECKMATE = 1000
 STALEMATE = 0
-DEPTH = 3
+DEPTH = 4
 
 
 def findBestMove(game_state, valid_moves, return_queue):
@@ -102,7 +102,7 @@ def scoreBoard(game_state):
     Score the board. A positive score is good for white, a negative score is good for black.
     """
     if game_state.checkmate:
-        if game_state.white_to_move:
+        if game_state.whiteToMove:
             return -CHECKMATE  # black wins
         else:
             return CHECKMATE  # white wins
