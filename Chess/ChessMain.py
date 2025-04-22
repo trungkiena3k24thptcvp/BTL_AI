@@ -1,6 +1,6 @@
 import pygame as p
 import ChessEngine
-
+from Ch_AI import *
 WIDTH = HEIGHT = 480
 DIMENSION = 8
 SQSIZE = HEIGHT // DIMENSION
@@ -14,6 +14,10 @@ def loadImages():
         IMAGES[piece] = p.transform.scale(p.image.load("images/" + piece + ".png"), (SQSIZE, SQSIZE))
 
 
+import multiprocessing
+from Ch_AI import findBestMove
+
+
 def main():
     p.init()
     screen = p.display.set_mode((WIDTH, HEIGHT))
@@ -24,14 +28,22 @@ def main():
     validMoves = gs.getAllValidMoves()
     moveMade = False
     running = True
+    gameOver = False
     sqSelected = ()
     playerClicks = []
+
+    # Thiết lập cho người chơi và AI: True nếu là người chơi (Human), False nếu là AI
+    playerOne = True  # Human is white
+    playerTwo = False  # AI is black
+
     while running:
+        isHumanTurn = (gs.whiteToMove and playerOne) or (not gs.whiteToMove and playerTwo)
+
         for e in p.event.get():
             if e.type == p.QUIT:
                 running = False
 
-            elif e.type == p.MOUSEBUTTONDOWN:
+            elif e.type == p.MOUSEBUTTONDOWN and not gameOver and isHumanTurn:
                 location = p.mouse.get_pos()
                 col = location[0] // SQSIZE
                 row = location[1] // SQSIZE
@@ -63,6 +75,19 @@ def main():
                     sqSelected = ()
                     playerClicks = []
                     moveMade = True
+
+        # AI thực hiện nước đi nếu là lượt AI
+        if not gameOver and not isHumanTurn:
+            return_queue = multiprocessing.Queue()  # Tạo hàng đợi để nhận kết quả từ AI
+            # Gọi hàm AI để tìm nước đi tốt nhất
+            findBestMove(gs, validMoves, return_queue)
+            aiMove = return_queue.get()  # Lấy kết quả từ hàng đợi
+            if aiMove is None:  # Trong trường hợp AI không đưa ra được nước đi
+                aiMove = findRandomMove(validMoves)  # Dùng nước đi ngẫu nhiên
+            print(f"AI chose move: {aiMove.getChessNotation()}")
+            gs.makeMove(aiMove)
+            moveMade = True
+
         if moveMade:
             validMoves = gs.getAllValidMoves()
             moveMade = False
@@ -73,7 +98,7 @@ def main():
             gameOver = True
             if gs.whiteToMove:
                 drawText(screen, 'Black wins by checkmate')
-            else: 
+            else:
                 drawText(screen, 'White wins by checkmate')
         elif gs.stalemate:
             gameOver = True
@@ -82,6 +107,8 @@ def main():
         clock.tick(MAX_FPS)
         p.display.flip()
 
+
+
 def highlightSquares(screen, gs, validMoves, sqSelected):
     if sqSelected != ():
         r, c = sqSelected
@@ -89,17 +116,17 @@ def highlightSquares(screen, gs, validMoves, sqSelected):
             s = p.Surface((SQSIZE, SQSIZE))
             s.set_alpha(100)
             s.fill(p.Color('blue'))
-            screen.blit(s, (c*SQSIZE, r*SQSIZE))
+            screen.blit(s, (c * SQSIZE, r * SQSIZE))
             s.fill(p.Color('yellow'))
             for move in validMoves:
                 if move.startRow == r and move.startCol == c:
                     screen.blit(s, (SQSIZE * move.endCol, SQSIZE * move.endRow))
 
+
 def drawGameState(screen, gs, validMoves, sqSelected):
     drawBoard(screen)
     highlightSquares(screen, gs, validMoves, sqSelected)
     drawPieces(screen, gs.board)
-    
 
 
 def drawBoard(screen):
@@ -150,13 +177,16 @@ def drawPromotionMenu(screen, color):
         p.display.update()
     return selected  # trả về tên quân chọn để phong
 
+
 def drawText(screen, text):
     font = p.font.SysFont("Arial", 32, True, False)
     textObject = font.render(text, 0, p.Color('Black'))
-    textLocation = p.Rect(0, 0, WIDTH, HEIGHT).move(WIDTH / 2 - textObject.get_width()/2, HEIGHT/2 - textObject.get_height()/2)
+    textLocation = p.Rect(0, 0, WIDTH, HEIGHT).move(WIDTH / 2 - textObject.get_width() / 2,
+                                                    HEIGHT / 2 - textObject.get_height() / 2)
     screen.blit(textObject, textLocation)
     textObject = font.render(text, 0, p.Color("Red"))
     screen.blit(textObject, textLocation.move(2, 2))
+
 
 if __name__ == "__main__":
     main()
