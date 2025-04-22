@@ -559,7 +559,8 @@ class Move():
     filesToCols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7}
     colsToFiles = {v: k for k, v in filesToCols.items()}
 
-    def __init__(self, startSq, endSq, board, promotionChoice=None, isEnpassantMove=False, isCastleMove=False):
+    def __init__(self, startSq, endSq, board, promotionChoice=None, isEnpassantMove=False, isCastleMove=False,
+                 enpassantPossible=False):
         """
         Khởi tạo một nước đi trong trò chơi.
         Args:
@@ -569,6 +570,7 @@ class Move():
         - promotionChoice (str): Lựa chọn phong Hậu (Q, R, B, N), mặc định là None.
         - isEnpassantMove (bool): True nếu là nước bắt tốt qua đường, mặc định False.
         - isCastleMove (bool): True nếu là nước nhập thành, mặc định False.
+        - enpassantPossible (bool): Trạng thái `enpassantPossible` trước khi thực hiện nước đi.
         """
         self.startRow = startSq[0]
         self.startCol = startSq[1]
@@ -579,6 +581,7 @@ class Move():
 
         # Kiểm tra bắt tốt qua đường (en passant)
         self.isEnpassantMove = isEnpassantMove
+        self.enpassantPossibleBeforeMove = enpassantPossible  # Lưu trạng thái en passant trước nước đi
 
         # Kiểm tra phong cấp
         self.isPromotion = False
