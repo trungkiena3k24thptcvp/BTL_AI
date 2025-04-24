@@ -10,6 +10,8 @@ class GameState():
             ["wp", "wp", "wp", "wp", "wp", "wp", "wp", "wp"],
             ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
         ]
+        self.moveFunctions = {"p": self.getPawnMoves, "R": self.getRookMoves, "N": self.getKnightMoves,
+                              "B": self.getBishopMoves, "Q": self.getQueenMoves, "K": self.getKingMoves}
         self.whiteToMove = True
         self.moveLog = []
         self.whiteKingLocation = (7, 4)
@@ -17,88 +19,14 @@ class GameState():
         self.inCheck = False
         self.pins = []
         self.checks = []
-        self.checkMate = False
-        self.staleMate = False
+        self.checkmate = False
+        self.stalemate = False
         self.enpassantPossible = ()  # tọa độ empassant có thể thực hiện
-        self.whiteKingMoved = False
-        self.blackKingMoved = False
-        self.whiteRookMoved = {'k_side': False, 'q_side': False}  # Xe Trắng
-        self.blackRookMoved = {'k_side': False, 'q_side': False}
-
-    def canCastle(self, kingSide: bool) -> bool:
-        """
-        Kiểm tra xem nước nhập thành có hợp lệ hay không.
-        Args:
-        - kingSide: (bool) True nếu nhập thành cánh vua, False nếu nhập thành cánh hậu.
-
-        Returns:
-        - (bool): True nếu có thể nhập thành, False nếu không hợp lệ.
-        """
-        # Nếu vua hiện đang bị chiếu, không thể nhập thành
-        if self.inCheck:
-            return False
-
-        # Kiểm tra điều kiện của quân trắng
-        if self.whiteToMove:
-            kingRow, kingCol = 7, 4  # Vị trí mặc định của Vua trắng
-            rookCol = 7 if kingSide else 0  # Cột của Xe (h1 hoặc a1)
-
-            # Kiểm tra trạng thái đã di chuyển của Vua và Xe
-            if self.whiteKingMoved or self.whiteRookMoved['k_side' if kingSide else 'q_side']:
-                return False
-
-        # Kiểm tra điều kiện của quân đen
-        else:
-            kingRow, kingCol = 0, 4  # Vị trí mặc định của Vua đen
-            rookCol = 7 if kingSide else 0  # Cột của Xe (h8 hoặc a8)
-
-            # Kiểm tra trạng thái đã di chuyển của Vua và Xe
-            if self.blackKingMoved or self.blackRookMoved['k_side' if kingSide else 'q_side']:
-                return False
-
-        # Kiểm tra các ô giữa Vua và Xe có trống không
-        step = 1 if rookCol > kingCol else -1
-        for col in range(kingCol + step, rookCol, step):
-            if self.board[kingRow][col] != '--':  # Nếu bất kỳ ô nào không trống
-                return False
-
-        # Kiểm tra các ô Vua sẽ đi qua hoặc đích đến có bị tấn công không
-        for col in (kingCol, kingCol + step, kingCol + 2 * step):
-            if self.squareUnderAttack(kingRow, col):  # Nếu ô đó bị tấn công
-                return False
-
-        return True
-
-    def castleMove(self, kingSide: bool):
-        """
-        Thực hiện nước nhập thành cho bên đang di chuyển.
-        Args:
-        - kingSide: (bool) True nếu nhập thành cánh vua, False nếu nhập thành cánh hậu.
-        """
-        # Xác định các tham số theo lượt
-        kingRow = 7 if self.whiteToMove else 0  # Vua trắng ở hàng 7, vua đen ở hàng 0
-        kingCol = 4  # Vị trí mặc định của vua
-        rookCol = 7 if kingSide else 0  # Vị trí của xe (h1/h8 cho cánh vua, a1/a8 cho cánh hậu)
-        step = 1 if kingSide else -1  # Hướng di chuyển (phải +1, trái -1)
-        king = 'wK' if self.whiteToMove else 'bK'
-        rook = 'wR' if self.whiteToMove else 'bR'
-
-        # Di chuyển vua và xe trên bàn cờ
-        self.board[kingRow][kingCol] = '--'  # Xóa vua khỏi vị trí cũ
-        self.board[kingRow][kingCol + 2 * step] = king  # Đưa vua đến vị trí mới
-        self.board[kingRow][rookCol] = '--'  # Xóa xe khỏi vị trí cũ
-        self.board[kingRow][kingCol + step] = rook  # Đưa xe đến vị trí mới
-
-        # Cập nhật vị trí vua và trạng thái đã di chuyển
-        if self.whiteToMove:
-            self.whiteKingLocation = (kingRow, kingCol + 2 * step)
-            self.whiteKingMoved = True
-            self.whiteRookMoved['k_side' if kingSide else 'q_side'] = True
-        else:
-            self.blackKingLocation = (kingRow, kingCol + 2 * step)
-            self.blackKingMoved = True
-            self.blackRookMoved['k_side' if kingSide else 'q_side'] = True
-
+        self.enpassant_possible_log = [self.enpassantPossible]
+        self.current_castling_rights = CastleRights(True, True, True, True)
+        self.castle_rights_log = [CastleRights(self.current_castling_rights.wks, self.current_castling_rights.bks,
+                                               self.current_castling_rights.wqs, self.current_castling_rights.bqs)]
+        
     def makeMove(self, move):
         """
         Thực hiện một nước đi trên bàn cờ, bao gồm các loại nước đi đặc biệt như phong cấp, bắt tốt qua đường,
@@ -119,13 +47,12 @@ class GameState():
             self.blackKingMoved = True  # Đánh dấu vua đen đã di chuyển
 
         # Phong cấp
-        if move.isPromotion:
-            self.board[move.endRow][move.endCol] = move.pieceMoved[
-                                                       0] + move.promotionChoice  # Thay thế bằng quân cờ mới
+        if move.isPawnPromotion:
+            self.board[move.endRow][move.endCol] = move.pieceMoved[0] + "Q"
 
         # Bắt tốt qua đường (En passant)
         if move.isEnpassantMove:
-            print("Is Enpassant Move:", move.isEnpassantMove)
+            #print("Is Enpassant Move:", move.isEnpassantMove)
             self.board[move.startRow][move.endCol] = "--"  # Xóa quân tốt bị bắt (ô phía sau)
 
         # Cập nhật trạng thái bắt tốt qua đường (en passant)
@@ -140,22 +67,17 @@ class GameState():
                 # Di chuyển Xe (Rook) từ h1/h8 tới f1/f8
                 self.board[move.endRow][move.endCol - 1] = self.board[move.endRow][move.endCol + 1]
                 self.board[move.endRow][move.endCol + 1] = "--"  # Xóa Xe ở vị trí ban đầu
-            elif move.endCol - move.startCol == -2:  # Nhập thành cánh hậu
+            else: # Nhập thành cánh hậu
                 # Di chuyển Xe (Rook) từ a1/a8 tới d1/d8
                 self.board[move.endRow][move.endCol + 1] = self.board[move.endRow][move.endCol - 2]
                 self.board[move.endRow][move.endCol - 2] = "--"  # Xóa Xe ở vị trí ban đầu
 
-        # Đánh dấu rằng Xe đã di chuyển (cho cánh vua/hậu)
-        if move.pieceMoved == 'wR':
-            if move.startRow == 7 and move.startCol == 0:  # Xe cánh hậu trắng
-                self.whiteRookMoved['q_side'] = True
-            elif move.startRow == 7 and move.startCol == 7:  # Xe cánh vua trắng
-                self.whiteRookMoved['k_side'] = True
-        elif move.pieceMoved == 'bR':
-            if move.startRow == 0 and move.startCol == 0:  # Xe cánh hậu đen
-                self.blackRookMoved['q_side'] = True
-            elif move.startRow == 0 and move.startCol == 7:  # Xe cánh vua đen
-                self.blackRookMoved['k_side'] = True
+        self.enpassant_possible_log.append(self.enpassantPossible)
+
+        #cap nhat nhap thanh
+        self.updateCastleRights(move)
+        self.castle_rights_log.append(CastleRights(self.current_castling_rights.wks, self.current_castling_rights.bks,
+                                                   self.current_castling_rights.wqs, self.current_castling_rights.bqs))
 
     def undoMove(self):
         """
@@ -175,46 +97,63 @@ class GameState():
             # Hoàn tác trạng thái vị trí của vua nếu vua di chuyển
             if move.pieceMoved == 'wK':
                 self.whiteKingLocation = (move.startRow, move.startCol)
-                self.whiteKingMoved = False  # Hoàn tác trạng thái vua trắng đã di chuyển
             elif move.pieceMoved == 'bK':
                 self.blackKingLocation = (move.startRow, move.startCol)
-                self.blackKingMoved = False  # Hoàn tác trạng thái vua đen đã di chuyển
-
-            # Hoàn tác nước nhập thành (nếu nước đi là nhập thành)
-            if move.isCastleMove:
-                if move.endCol - move.startCol == 2:  # Nhập thành cánh vua
-                    # Di chuyển Xe về vị trí cũ
-                    self.board[move.endRow][move.endCol + 1] = self.board[move.endRow][move.endCol - 1]
-                    self.board[move.endRow][move.endCol - 1] = "--"
-                elif move.endCol - move.startCol == -2:  # Nhập thành cánh hậu
-                    # Di chuyển Xe về vị trí cũ
-                    self.board[move.endRow][move.endCol - 2] = self.board[move.endRow][move.endCol + 1]
-                    self.board[move.endRow][move.endCol + 1] = "--"
-
-            # Hoàn tác trạng thái đã di chuyển của Xe
-            if move.pieceMoved == 'wR':
-                if move.startRow == 7 and move.startCol == 0:  # Xe cánh hậu trắng
-                    self.whiteRookMoved['q_side'] = False
-                elif move.startRow == 7 and move.startCol == 7:  # Xe cánh vua trắng
-                    self.whiteRookMoved['k_side'] = False
-            elif move.pieceMoved == 'bR':
-                if move.startRow == 0 and move.startCol == 0:  # Xe cánh hậu đen
-                    self.blackRookMoved['q_side'] = False
-                elif move.startRow == 0 and move.startCol == 7:  # Xe cánh vua đen
-                    self.blackRookMoved['k_side'] = False
-
-            # Hoàn tác trạng thái phong cấp (nếu có)
-            if move.isPromotion:
-                self.board[move.startRow][move.startCol] = move.pieceMoved  # Đưa tốt quay lại
-                self.board[move.endRow][move.endCol] = move.pieceCaptured  # Khôi phục tốt bị thay thế
-
-            # Hoàn tác nước bắt tốt qua đường (en passant)
+            #undo enpassant move
             if move.isEnpassantMove:
-                self.board[move.endRow][move.endCol] = "--"  # Xóa quân tốt của đối phương ở ô mục tiêu
-                self.board[move.startRow][move.endCol] = move.pieceCaptured  # Khôi phục quân tốt bị bắt
+                self.board[move.endRow][move.endCol] = "--"
+                self.board[move.startRow][move.endCol] = move.pieceCaptured
+            
+            self.enpassant_possible_log.pop()
+            self.enpassantPossible = self.enpassant_possible_log[-1]
 
-            # Khôi phục trạng thái bắt tốt qua đường (en passant)
-            self.enpassantPossible = move.enpassantPossibleBeforeMove
+            #undo castle rights
+            self.castle_rights_log.pop()
+            self.current_castling_rights = self.castle_rights_log[-1]
+            #undo castle move
+            if move.isCastleMove:
+                if move.endCol - move.startCol == 2:
+                    self.board[move.endRow][move.endCol + 1] = self.board[move.endRow][move.endCol - 1]
+                    self.board[move.endRow][move.endCol - 1] = '--'
+                else:
+                    self.board[move.endRow][move.endCol - 2] = self.board[move.endRow][move.endCol + 1]
+                    self.board[move.endRow][move.endCol + 1] = '--'
+            self.checkmate = False
+            self.stalemate = False
+
+    def updateCastleRights(self, move):
+
+        if move.pieceCaptured == "wR":
+            if move.endCol == 0:
+                self.current_castling_rights.wqs = False
+            elif move.endCol == 7:
+                self.current_castling_rights.wks = False
+        elif move.pieceCaptured == "bR":
+            if move.endCol == 0:
+                self.current_castling_rights.bqs = False
+            elif move.endCol == 7:
+                self.current_castling_rights.bks = False
+
+        if move.pieceMoved == 'wK':
+            self.current_castling_rights.wqs = False
+            self.current_castling_rights.wks = False
+        elif move.pieceMoved == 'bK':
+            self.current_castling_rights.bqs = False
+            self.current_castling_rights.bks = False
+        elif move.pieceMoved == 'wR':
+            if move.startRow == 7:
+                if move.startCol == 0:
+                    self.current_castling_rights.wqs = False
+                elif move.startCol == 7:
+                    self.current_castling_rights.wks = False
+        elif move.pieceMoved == 'bR':
+             if move.startRow == 0:
+                if move.startCol == 0:
+                     self.current_castling_rights.bqs = False
+                elif move.startCol == 7:
+                    self.current_castling_rights.bks = False
+
+
 
     def getRookMoves(self, r, c, moves):
         piecePinned = False
@@ -225,7 +164,7 @@ class GameState():
                 pinDirection = (self.pins[i][2], self.pins[i][3])
                 if self.board[r][c][1] != 'Q':
                     self.pins.remove(self.pins[i])
-                    break
+                break
         directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Các hướng di chuyển: lên, xuống, trái, phải
         enemyColor = "b" if self.whiteToMove else "w"
         for d in directions:
@@ -317,6 +256,25 @@ class GameState():
                         self.whiteKingLocation = (row, col)
                     else:
                         self.blackKingLocation = (row, col)
+    def getCastleMoves(self, row, col, moves):
+        if self.squareUnderAttack(row, col):
+            return
+        if (self.whiteToMove and self.current_castling_rights.wks) or (
+                not self.whiteToMove and self.current_castling_rights.bks):
+            self.getKingsideCastleMoves(row, col, moves)
+        if (self.whiteToMove and self.current_castling_rights.wqs) or (
+                not self.whiteToMove and self.current_castling_rights.bqs):
+            self.getQueensideCastleMoves(row, col, moves)
+    
+    def getKingsideCastleMoves(self, row, col, moves):
+        if self.board[row][col + 1] == '--' and self.board[row][col + 2] == '--':
+            if not self.squareUnderAttack(row, col + 1) and not self.squareUnderAttack(row, col + 2):
+                moves.append(Move((row, col), (row, col + 2), self.board, isCastleMove=True))
+    
+    def getQueensideCastleMoves(self, row, col, moves):
+         if self.board[row][col - 1] == '--' and self.board[row][col - 2] == '--' and self.board[row][col - 3] == '--':
+             if not self.squareUnderAttack(row, col - 1) and not self.squareUnderAttack(row, col - 2):
+                 moves.append(Move((row, col), (row, col - 2), self.board, isCastleMove=True))
 
     def getAllPossibleMoves(self):
         moves = []
@@ -346,7 +304,8 @@ class GameState():
         """
         Lấy tất cả các nước đi hợp lệ cho bên đang di chuyển, bao gồm cả nước nhập thành (có di chuyển Xe).
         """
-        tempEnpassantPossible = self.enpassantPossible  # Lưu trạng thái en passant ban đầu
+        temp_castle_rights = CastleRights(self.current_castling_rights.wks, self.current_castling_rights.bks,
+                                          self.current_castling_rights.wqs, self.current_castling_rights.bqs)
         moves = []
         self.inCheck, self.pins, self.checks = self.checkForPinsAndChecks()  # Kiểm tra chiếu, ghim và các nước chiếu khác
         if self.whiteToMove:
@@ -385,36 +344,11 @@ class GameState():
             # Kiểm tra và thêm nước nhập thành nếu không bị chiếu
             if self.whiteToMove:
                 # Nhập thành cánh vua (King-side castling)
-                if not self.whiteKingMoved and not self.whiteRookMoved['k_side']:
-                    if self.board[7][5] == '--' and self.board[7][6] == '--':  # Ô giữa trống
-                        if not self.squareUnderAttack(7, 4) and not self.squareUnderAttack(7,
-                                                                                           5) and not self.squareUnderAttack(
-                            7, 6):
-                            moves.append(Move((7, 4), (7, 6), self.board, isCastleMove=True))
-                # Nhập thành cánh hậu (Queen-side castling)
-                if not self.whiteKingMoved and not self.whiteRookMoved['q_side']:
-                    if self.board[7][1] == '--' and self.board[7][2] == '--' and self.board[7][
-                        3] == '--':  # Ô giữa trống
-                        if not self.squareUnderAttack(7, 4) and not self.squareUnderAttack(7,
-                                                                                           3) and not self.squareUnderAttack(
-                            7, 2):
-                            moves.append(Move((7, 4), (7, 2), self.board, isCastleMove=True))
+                self.getCastleMoves(self.whiteKingLocation[0], self.whiteKingLocation[1], moves)
             else:
                 # Nhập thành cánh vua (King-side castling)
-                if not self.blackKingMoved and not self.blackRookMoved['k_side']:
-                    if self.board[0][5] == '--' and self.board[0][6] == '--':  # Ô giữa trống
-                        if not self.squareUnderAttack(0, 4) and not self.squareUnderAttack(0,
-                                                                                           5) and not self.squareUnderAttack(
-                            0, 6):
-                            moves.append(Move((0, 4), (0, 6), self.board, isCastleMove=True))
-                # Nhập thành cánh hậu (Queen-side castling)
-                if not self.blackKingMoved and not self.blackRookMoved['q_side']:
-                    if self.board[0][1] == '--' and self.board[0][2] == '--' and self.board[0][
-                        3] == '--':  # Ô giữa trống
-                        if not self.squareUnderAttack(0, 4) and not self.squareUnderAttack(0,
-                                                                                           3) and not self.squareUnderAttack(
-                            0, 2):
-                            moves.append(Move((0, 4), (0, 2), self.board, isCastleMove=True))
+                self.getCastleMoves(self.blackKingLocation[0], self.blackKingLocation[1], moves)
+
 
         # Kiểm tra trạng thái kết thúc trò chơi
         if len(moves) == 0:
@@ -427,7 +361,7 @@ class GameState():
             self.stalemate = False
 
         # Khôi phục trạng thái en passant
-        self.enpassantPossible = tempEnpassantPossible
+        self.current_castling_rights = temp_castle_rights
         return moves
 
     def checkForPinsAndChecks(self):
@@ -510,48 +444,76 @@ class GameState():
                 self.pins.remove(self.pins[i])
                 break
         if self.whiteToMove:
-            # di chuyen
-            if self.board[r - 1][c] == '--':
-                if not piecePinned or pinDirection == (-1, 0):
-                    moves.append(Move((r, c), (r - 1, c), self.board))
-                    if r == 6 and self.board[r - 2][c] == '--':
-                        moves.append(Move((r, c), (r - 2, c), self.board))
-            # bat trai
-            if c - 1 >= 0 and self.board[r - 1][c - 1][0] == 'b':
-                if not piecePinned or pinDirection == (-1, -1):
-                    moves.append(Move((r, c), (r - 1, c - 1), self.board))
-            if c - 1 >= 0 and (r - 1, c - 1) == self.enpassantPossible:
-                if not piecePinned or pinDirection == (-1, -1):
-                    moves.append(Move((r, c), (r - 1, c - 1), self.board, isEnpassantMove=True))
-            # bat phai
-            if c + 1 <= 7 and self.board[r - 1][c + 1][0] == 'b':
-                if not piecePinned or pinDirection == (-1, 1):
-                    moves.append(Move((r, c), (r - 1, c + 1), self.board))
-            if c + 1 <= 7 and (r - 1, c + 1) == self.enpassantPossible:
-                if not piecePinned or pinDirection == (-1, 1):
-                    moves.append(Move((r, c), (r - 1, c + 1), self.board, isEnpassantMove=True))
+            move_amount = -1
+            start_row = 6
+            enemy_color = "b"
+            king_row, king_col = self.whiteKingLocation
         else:
-            # di chuyen
-            if self.board[r + 1][c] == '--':
-                if not piecePinned or pinDirection == (1, 0):
-                    moves.append(Move((r, c), (r + 1, c), self.board))
-                    if r == 1 and self.board[r + 2][c] == '--':
-                        moves.append(Move((r, c), (r + 2, c), self.board))
-            # bat trai
-            if c - 1 >= 0 and self.board[r + 1][c - 1][0] == 'w':
-                if not piecePinned or pinDirection == (1, -1):
-                    moves.append(Move((r, c), (r + 1, c - 1), self.board))
-            if c - 1 >= 0 and (r + 1, c - 1) == self.enpassantPossible:
-                if not piecePinned or pinDirection == (1, -1):
-                    moves.append(Move((r, c), (r + 1, c - 1), self.board, isEnpassantMove=True))
-            # bat phai
-            if c + 1 <= 7 and self.board[r + 1][c + 1][0] == 'w':
-                if not piecePinned or pinDirection == (1, 1):
-                    moves.append(Move((r, c), (r + 1, c + 1), self.board))
-            if c + 1 <= 7 and (r + 1, c + 1) == self.enpassantPossible:
-                if not piecePinned or pinDirection == (1, 1):
-                    moves.append(Move((r, c), (r + 1, c + 1), self.board, isEnpassantMove=True))
+            move_amount = 1
+            start_row = 1
+            enemy_color = "w"
+            king_row, king_col = self.blackKingLocation
+        if self.board[r + move_amount][c] == "--":
+            if not piecePinned or pinDirection == (move_amount, 0):
+                moves.append(Move((r, c), (r + move_amount, c), self.board))
+                if r == start_row and self.board[r + 2 * move_amount][c] == "--":
+                    moves.append(Move((r, c), (r + 2 * move_amount, c), self.board))
+        if c - 1 >= 0:
+            if not piecePinned or pinDirection == (move_amount, -1):
+                if self.board[r + move_amount][c - 1][0] == enemy_color:
+                    moves.append(Move((r, c), (r + move_amount, c - 1), self.board))
+                if (r + move_amount, c - 1) == self.enpassantPossible:
+                    attacking_piece = blocking_piece = False
+                    if king_row == r:
+                        if king_col < c:
+                            inside_range = range(king_col + 1, c - 1)
+                            outside_range = range(c + 1, 8)
+                        else:
+                            inside_range = range(king_col - 1, c, -1)
+                            outside_range = range(c - 2, -1, -1)
+                        for i in inside_range:
+                            if self.board[r][i] != "--":
+                                blocking_piece = True
+                        for i in outside_range:
+                            square = self.board[r][i]
+                            if square[0] == enemy_color and (square[1] == "R" or square[1] == "Q"):
+                                attacking_piece = True
+                            elif square != "--":
+                                blocking_piece = True
+                    if not attacking_piece or blocking_piece:
+                        moves.append(Move((r, c), (r + move_amount, c - 1), self.board, isEnpassantMove=True))
+        if c + 1 <= 7:
+            if not piecePinned or pinDirection == (move_amount, +1):
+                if self.board[r + move_amount][c + 1][0] == enemy_color:
+                    moves.append(Move((r, c), (r + move_amount, c + 1), self.board))
+                if (r + move_amount, c + 1) == self.enpassantPossible:
+                    attacking_piece = blocking_piece = False
+                    if king_row == r:
+                        if king_col < c:
+                            inside_range = range(king_col + 1, c)
+                            outside_range = range(c + 2, 8)
+                        else:
+                            inside_range = range(king_col - 1, c + 1, -1)
+                            outside_range = range(c - 1, -1, -1)
+                        for i in inside_range:
+                            if self.board[r][i] != "--":
+                                blocking_piece = True
+                        for i in outside_range:
+                            square = self.board[r][i]
+                            if square[0] == enemy_color and (square[1] == "R" or square[1] == "Q"):
+                                attacking_piece = True
+                            elif square != "--":
+                                blocking_piece = True
+                    if not attacking_piece or blocking_piece:
+                        moves.append(Move((r, c), (r + move_amount, c + 1), self.board, isEnpassantMove=True))
 
+
+class CastleRights:
+    def __init__(self, wks, bks, wqs, bqs):
+        self.wks = wks
+        self.bks = bks
+        self.wqs = wqs
+        self.bqs = bqs
 
 class Move():
     ranksToRows = {"1": 7, "2": 6, "3": 5, "4": 4, "5": 3, "6": 2, "7": 1, "8": 0}
@@ -559,8 +521,7 @@ class Move():
     filesToCols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7}
     colsToFiles = {v: k for k, v in filesToCols.items()}
 
-    def __init__(self, startSq, endSq, board, promotionChoice=None, isEnpassantMove=False, isCastleMove=False,
-                 enpassantPossible=False):
+    def __init__(self, startSq, endSq, board, isEnpassantMove=False, isCastleMove=False):
         """
         Khởi tạo một nước đi trong trò chơi.
         Args:
@@ -579,29 +540,64 @@ class Move():
         self.pieceMoved = board[self.startRow][self.startCol]
         self.pieceCaptured = board[self.endRow][self.endCol]
 
-        # Kiểm tra bắt tốt qua đường (en passant)
+        #pawn promotion
+        self.isPawnPromotion = (self.pieceMoved == "wp" and self.endRow == 0) or (
+                self.pieceMoved == "bp" and self.endRow == 7)
+        #en passant
         self.isEnpassantMove = isEnpassantMove
-        self.enpassantPossibleBeforeMove = enpassantPossible  # Lưu trạng thái en passant trước nước đi
-
-        # Kiểm tra phong cấp
-        self.isPromotion = False
-        self.promotionChoice = promotionChoice
-        if (self.pieceMoved == 'wp' and self.endRow == 0) or (self.pieceMoved == 'bp' and self.endRow == 7):
-            self.isPromotion = True
-
-        # Kiểm tra nhập thành
+        if self.isEnpassantMove:
+            self.pieceCaptured = "wp" if self.pieceMoved == "bp" else "bp"
+        #castle move
         self.isCastleMove = isCastleMove
+        self.isCaptured = self.pieceCaptured != "--"
+        self.moveID = self.startRow * 1000 + self.startCol * 100 + self.endRow * 10 + self.endCol
+        
+        
 
     def getChessNotation(self):
-        return self.getRankFile(self.startRow, self.startCol) + self.getRankFile(self.endRow, self.endCol)
+        if self.isPawnPromotion:
+            return self.getRankFile(self.endRow, self.endCol) + "Q"
+        if self.isCastleMove:
+            if self.endCol == 1:
+                return "0-0-0"
+            else:
+                return "0-0"
+        if self.isEnpassantMove:
+            return self.getRankFile(self.startRow, self.startCol)[0] + "x" + self.getRankFile(self.endRow,
+                                                                                                self.endCol) + " e.p."
+        if self.pieceCaptured != "--":
+            if self.pieceMoved[1] == "p":
+                return self.getRankFile(self.startRow, self.startCol)[0] + "x" + self.getRankFile(self.endRow,
+                                                                                                    self.endCol)
+            else:
+                return self.pieceMoved[1] + "x" + self.getRankFile(self.endRow, self.endCol)
+        else:
+            if self.pieceMoved[1] == "p":
+                return self.getRankFile(self.endRow, self.endCol)
+            else:
+                return self.pieceMoved[1] + self.getRankFile(self.endRow, self.endCol)
 
     def getRankFile(self, r, c):
         return self.colsToFiles[c] + self.rowsToRanks[r]
 
     def __eq__(self, other):
-        return (self.startRow == other.startRow and
-                self.startCol == other.startCol and
-                self.endRow == other.endRow and
-                self.endCol == other.endCol and
-                self.pieceMoved == other.pieceMoved and
-                self.pieceCaptured == other.pieceCaptured)
+        if isinstance(other, Move):
+            return self.moveID == other.moveID
+        return False
+    
+    def __str__(self):
+        if self.isCastleMove:
+            return "0-0" if self.endCol == 6 else "0-0-0"
+
+        end_square = self.getRankFile(self.endRow, self.endCol)
+
+        if self.pieceMoved[1] == "p":
+            if self.isCaptured:
+                return self.colsToFiles[self.startCol] + "x" + end_square
+            else:
+                return end_square + "Q" if self.isPawnPromotion else end_square
+
+        move_string = self.pieceMoved[1]
+        if self.isCaptured:
+            move_string += "x"
+        return move_string + end_square
