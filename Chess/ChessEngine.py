@@ -24,7 +24,6 @@ class GameState():
         self.blackKingMoved = False
         self.whiteRookMoved = {'k_side': False, 'q_side': False}  # Xe Trắng
         self.blackRookMoved = {'k_side': False, 'q_side': False}
-        self.undoMode = False
 
     def canCastle(self, kingSide: bool) -> bool:
         """
@@ -121,11 +120,12 @@ class GameState():
 
         # Phong cấp
         if move.isPromotion:
-            self.board[move.endRow][move.endCol] = move.pieceMoved[0] + move.promotionChoice  # Thay thế bằng quân cờ mới
+            self.board[move.endRow][move.endCol] = move.pieceMoved[
+                                                       0] + move.promotionChoice  # Thay thế bằng quân cờ mới
 
         # Bắt tốt qua đường (En passant)
         if move.isEnpassantMove:
-            #print("Is Enpassant Move:", move.isEnpassantMove)
+            print("Is Enpassant Move:", move.isEnpassantMove)
             self.board[move.startRow][move.endCol] = "--"  # Xóa quân tốt bị bắt (ô phía sau)
 
         # Cập nhật trạng thái bắt tốt qua đường (en passant)
@@ -162,11 +162,7 @@ class GameState():
         Hoàn tác nước đi cuối cùng. Khôi phục trạng thái bàn cờ và các biến liên quan
         như trạng thái nhập thành, bắt tốt qua đường, vị trí của vua, v.v.
         """
-        if len(self.moveLog) == 0:
-            self.undoMode = False
-            return
-        else:                      # Chỉ hoàn tác nếu có nước đi đã được thực hiện
-            self.undoMode = True
+        if len(self.moveLog) != 0:  # Chỉ hoàn tác nếu có nước đi đã được thực hiện
             move = self.moveLog.pop()  # Lấy nước đi cuối cùng trong log
 
             # Khôi phục trạng thái bàn cờ
@@ -174,7 +170,7 @@ class GameState():
             self.board[move.endRow][move.endCol] = move.pieceCaptured  # Khôi phục quân bị bắt (nếu có)
 
             # Đổi lượt lại
-            self.whiteToMove = True if move.pieceMoved[0] == 'w' else False
+            self.whiteToMove = not self.whiteToMove
 
             # Hoàn tác trạng thái vị trí của vua nếu vua di chuyển
             if move.pieceMoved == 'wK':
@@ -216,10 +212,9 @@ class GameState():
             if move.isEnpassantMove:
                 self.board[move.endRow][move.endCol] = "--"  # Xóa quân tốt của đối phương ở ô mục tiêu
                 self.board[move.startRow][move.endCol] = move.pieceCaptured  # Khôi phục quân tốt bị bắt
-                self.enpassantPossible = (move.endRow, move.endCol)
+
             # Khôi phục trạng thái bắt tốt qua đường (en passant)
-            if move.pieceMoved[1] == 'p' and abs(move.startRow - move.endRow) == 2:
-                self.enpassantPossible = ()
+            self.enpassantPossible = move.enpassantPossibleBeforeMove
 
     def getRookMoves(self, r, c, moves):
         piecePinned = False
@@ -564,7 +559,8 @@ class Move():
     filesToCols = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4, "f": 5, "g": 6, "h": 7}
     colsToFiles = {v: k for k, v in filesToCols.items()}
 
-    def __init__(self, startSq, endSq, board, promotionChoice='Q', isEnpassantMove=False, isCastleMove=False):
+    def __init__(self, startSq, endSq, board, promotionChoice=None, isEnpassantMove=False, isCastleMove=False,
+                 enpassantPossible=False):
         """
         Khởi tạo một nước đi trong trò chơi.
         Args:
@@ -585,7 +581,7 @@ class Move():
 
         # Kiểm tra bắt tốt qua đường (en passant)
         self.isEnpassantMove = isEnpassantMove
-        #self.enpassantPossibleBeforeMove = enpassantPossible  # Lưu trạng thái en passant trước nước đi
+        self.enpassantPossibleBeforeMove = enpassantPossible  # Lưu trạng thái en passant trước nước đi
 
         # Kiểm tra phong cấp
         self.isPromotion = False
