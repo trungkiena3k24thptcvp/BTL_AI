@@ -43,7 +43,7 @@ def main():
             if e.type == p.QUIT:
                 running = False
 
-            elif e.type == p.MOUSEBUTTONDOWN and not gameOver and isHumanTurn:
+            elif e.type == p.MOUSEBUTTONDOWN and not gameOver and isHumanTurn and not gs.undoMode:
                 location = p.mouse.get_pos()
                 col = location[0] // SQSIZE
                 row = location[1] // SQSIZE
@@ -59,7 +59,8 @@ def main():
                     for i in range(len(validMoves)):
                         if move == validMoves[i]:
                             print("Is Enpassant Move:", validMoves[i].isEnpassantMove)
-                            if move.isPromotion:
+                            print("Is Promotion:", validMoves[i].isPromotion)
+                            if validMoves[i].isPromotion:
                                 promotedPiece = drawPromotionMenu(screen, move.pieceMoved[0])
                                 validMoves[i].promotionChoice = promotedPiece
                             gs.makeMove(validMoves[i])
@@ -70,14 +71,30 @@ def main():
                     if not moveMade:
                         playerClicks = [sqSelected]
             elif e.type == p.KEYDOWN:
-                if e.key == p.K_z:
-                    gs.undoMove()
-                    sqSelected = ()
-                    playerClicks = []
-                    moveMade = True
+                if e.key == p.K_z:  # Phím undo
+                    if not gs.undoMode:  # Lần đầu nhấn z
+                        gs.undoMode = True
+                        print("Chế độ undo - Bấm 'z' để undo tiếp, SPACE để kết thúc")
+
+                    # Thực hiện undo dù là lần đầu hay tiếp theo
+                    if len(gs.moveLog) > 0:
+                        gs.undoMove()
+                        sqSelected = ()
+                        playerClicks = []
+                        moveMade = True
+                        validMoves = gs.getAllValidMoves()
+                        print(f"Đã undo, còn {len(gs.moveLog)} nước đi")
+                    else:
+                        print("Không thể undo tiếp!")
+                        gs.undoMode = False
+
+                elif e.key == p.K_SPACE and gs.undoMode:  # Thoát chế độ undo
+                    gs.undoMode = False
+                    print("Kết thúc chế độ undo")
+                    moveMade = True  # Đảm bảo bàn cờ được vẽ lại  # Tắt chế độ undo từ GameState
 
         # AI thực hiện nước đi nếu là lượt AI
-        if not gameOver and not isHumanTurn:
+        if not gameOver and not isHumanTurn and not gs.undoMode:
             return_queue = multiprocessing.Queue()  # Tạo hàng đợi để nhận kết quả từ AI
             # Gọi hàm AI để tìm nước đi tốt nhất
             findBestMove(gs, validMoves, return_queue)

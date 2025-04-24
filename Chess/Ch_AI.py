@@ -44,7 +44,7 @@ queen_scores = [[0.0, 0.2, 0.2, 0.3, 0.3, 0.2, 0.2, 0.0],
 pawn_scores = [[0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8],
                [0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7],
                [0.3, 0.3, 0.4, 0.5, 0.5, 0.4, 0.3, 0.3],
-               [0.25, 0.25, 0.3, 0.45, 0.45, 0.3, 0.25, 0.25],
+               [0.25, 0.25, 0.5, 0.45, 0.45, 0.5, 0.25, 0.25],
                [0.2, 0.2, 0.2, 0.4, 0.4, 0.2, 0.2, 0.2],
                [0.25, 0.15, 0.1, 0.2, 0.2, 0.1, 0.15, 0.25],
                [0.25, 0.3, 0.3, 0.0, 0.0, 0.3, 0.3, 0.25],
@@ -67,9 +67,20 @@ DEPTH = 4
 
 
 def findBestMove(game_state, valid_moves, return_queue):
+    # Nếu đang trong chế độ undo, không tính nước đi
+    if game_state.undoMode:
+        return_queue.put(None)
+        return
+
     global next_move
     next_move = None
     random.shuffle(valid_moves)
+
+    # Xử lý các nước đi phong hậu trước
+    for i in range(len(valid_moves)):
+        if valid_moves[i].isPromotion:
+            valid_moves[i].promotionChoice = 'Q'
+
     findMoveNegaMaxAlphaBeta(game_state, valid_moves, DEPTH, -CHECKMATE, CHECKMATE,
                              1 if game_state.whiteToMove else -1)
     return_queue.put(next_move)
@@ -84,7 +95,14 @@ def findMoveNegaMaxAlphaBeta(game_state, valid_moves, depth, alpha, beta, turn_m
     for move in valid_moves:
         game_state.makeMove(move)
         next_moves = game_state.getAllValidMoves()
+
+        #Ưu tiên phong hậu
+        promotion_bonus = 0
+        if move.isPromotion and move.promotionChoice == 'Q':
+            promotion_bonus = piece_score['Q'] - piece_score['p']
+
         score = -findMoveNegaMaxAlphaBeta(game_state, next_moves, depth - 1, -beta, -alpha, -turn_multiplier)
+        score += promotion_bonus * turn_multiplier
         if score > max_score:
             max_score = score
             if depth == DEPTH:
@@ -128,4 +146,7 @@ def findRandomMove(valid_moves):
     """
     Picks and returns a random valid move.
     """
-    return random.choice(valid_moves)
+    move = random.choice(valid_moves)
+    if move.isPromotion:
+        move.promotionChoice = 'Q'  # Luôn chọn phong hậu nếu có cơ hội
+    return move
