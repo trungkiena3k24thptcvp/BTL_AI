@@ -120,6 +120,11 @@ def main():
             if animate:
                 animateMove(gs.moveLog[-1], screen, gs.board, clock)
             validMoves = gs.getAllValidMoves()
+            gs.updateLastPositions()
+            print(gs.last_positions)
+            if gs.isThreefoldRepetitionConsecutive():
+                gameOver = True
+                gs.stalemate = True
             moveMade = False
             animate = False
             move_undone = False

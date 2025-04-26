@@ -26,6 +26,7 @@ class GameState():
         self.current_castling_rights = CastleRights(True, True, True, True)
         self.castle_rights_log = [CastleRights(self.current_castling_rights.wks, self.current_castling_rights.bks,
                                                self.current_castling_rights.wqs, self.current_castling_rights.bqs)]
+        self.last_positions = []
 
     def makeMove(self, move):
         """
@@ -458,6 +459,22 @@ class GameState():
             if move.endRow == r and move.endCol == c:
                 return True
         return False
+    
+    def updateLastPositions(self):
+        fen = self.boardToString()
+        self.last_positions.append(fen)
+        if len(self.last_positions) > 9:
+            self.last_positions.pop(0)
+
+    def isThreefoldRepetitionConsecutive(self):
+        if len(self.last_positions) < 9:
+            return False
+        return (self.last_positions[8] == self.last_positions[4] == self.last_positions[0])
+    
+    def boardToString(self):
+        board_str = ''.join([''.join(row) for row in self.board])
+        turn_str = 'w' if self.whiteToMove else 'b'
+        return board_str + turn_str
 
     def getPawnMoves(self, r, c, moves):
         piecePinned = False
