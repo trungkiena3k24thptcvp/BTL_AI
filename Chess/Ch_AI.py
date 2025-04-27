@@ -63,23 +63,32 @@ piece_position_scores = {"wN": knight_scores,
 
 CHECKMATE = 1000
 STALEMATE = 0
-DEPTH = 4
+DEPTH = 3
 
 
 def findBestMove(game_state, valid_moves, return_queue):
+    """
+    Find the best move using the negamax algorithm with alpha-beta pruning.
+    """
     global next_move
     next_move = None
-    random.shuffle(valid_moves)
+    random.shuffle(valid_moves)  # Randomize move order initially for unpredictability
     findMoveNegaMaxAlphaBeta(game_state, valid_moves, DEPTH, -CHECKMATE, CHECKMATE,
                              1 if game_state.whiteToMove else -1)
     return_queue.put(next_move)
 
 
 def findMoveNegaMaxAlphaBeta(game_state, valid_moves, depth, alpha, beta, turn_multiplier):
+    """
+    Negamax algorithm with alpha-beta pruning to determine the best move.
+    """
     global next_move
     if depth == 0:
         return turn_multiplier * scoreBoard(game_state)
-    # move ordering - implement later //TODO
+
+    # Sort moves to optimize alpha-beta pruning
+    valid_moves = orderMoves(game_state, valid_moves)
+
     max_score = -CHECKMATE
     for move in valid_moves:
         game_state.makeMove(move)
@@ -92,29 +101,58 @@ def findMoveNegaMaxAlphaBeta(game_state, valid_moves, depth, alpha, beta, turn_m
         game_state.undoMove()
         if max_score > alpha:
             alpha = max_score
-        if alpha >= beta:
+        if alpha >= beta:  # Beta cutoff
             break
     return max_score
 
 
+def orderMoves(game_state, moves):
+    """
+    Order moves based on a heuristic to prioritize better moves.
+    """
+
+    def moveScore(move):
+        score = 0
+
+        # Capture priority: Assign a high value to captures.
+        if move.pieceCaptured != "--":
+            score += 10 * piece_score[move.pieceCaptured[1]]  # Capturing higher-valued pieces is better.
+
+        # Promotion bonus
+        if move.isPawnPromotion:
+            score += 1000  # Prioritize pawn promotions.
+
+        # Castling: Assign a lower priority bonus for castling.
+        if move.isCastleMove:
+            score += 50
+
+        # Optionally: Add checks, positional advantages, etc.
+        return score
+
+    # Sort moves by descending score (higher is better)
+    moves.sort(key=moveScore, reverse=True)
+    return moves
+
+
 def scoreBoard(game_state):
     """
-    Score the board. A positive score is good for white, a negative score is good for black.
+    Score the board. A positive score is good for white, and a negative score is good for black.
     """
     if game_state.checkmate:
         if game_state.whiteToMove:
-            return -CHECKMATE  # black wins
+            return -CHECKMATE  # Black wins
         else:
-            return CHECKMATE  # white wins
+            return CHECKMATE  # White wins
     elif game_state.stalemate:
         return STALEMATE
+
     score = 0
     for row in range(len(game_state.board)):
         for col in range(len(game_state.board[row])):
             piece = game_state.board[row][col]
             if piece != "--":
                 piece_position_score = 0
-                if piece[1] != "K":
+                if piece[1] != "K":  # King is not scored with positional advantages
                     piece_position_score = piece_position_scores[piece][row][col]
                 if piece[0] == "w":
                     score += piece_score[piece[1]] + piece_position_score
