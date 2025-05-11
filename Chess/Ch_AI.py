@@ -2,7 +2,9 @@
 Handling the AI moves.
 """
 import random
+import time
 
+TIME_LIMIT = 5
 piece_score = {"K": 1000, "Q": 9, "R": 5, "B": 3, "N": 3, "p": 1}
 
 knight_scores = [[0.0, 0.1, 0.2, 0.2, 0.2, 0.2, 0.1, 0.0],
@@ -63,46 +65,71 @@ piece_position_scores = {"wN": knight_scores,
 
 CHECKMATE = 1000
 STALEMATE = 0
-DEPTH = 3
+DEPTH = 4
 
 
 def findBestMove(game_state, valid_moves, return_queue):
     """
-    Find the best move using the negamax algorithm with alpha-beta pruning.
+    Find the best move using the iterative deepening search with negamax algorithm and alpha-beta pruning.
     """
-    global next_move
+    global next_move, stop_search
     next_move = None
-    random.shuffle(valid_moves)  # Randomize move order initially for unpredictability
-    findMoveNegaMaxAlphaBeta(game_state, valid_moves, DEPTH, -CHECKMATE, CHECKMATE,
-                             1 if game_state.whiteToMove else -1)
+    stop_search = False
+    random.shuffle(valid_moves)
+
+    start_time = time.time()
+
+    # Iterative deepening loop
+    for depth in range(1, DEPTH + 1):
+        findMoveNegaMaxAlphaBeta(game_state, valid_moves, depth, -CHECKMATE, CHECKMATE,
+                                 1 if game_state.whiteToMove else -1, start_time)
+
+        # If we have exceeded the time limit, stop further searching
+        if stop_search:
+            break
+
+    # Nếu hết thời gian mà chưa tìm được move tốt nhất, chọn random
+    if next_move is None:
+        next_move = findRandomMove(valid_moves)
+
     return_queue.put(next_move)
 
 
-def findMoveNegaMaxAlphaBeta(game_state, valid_moves, depth, alpha, beta, turn_multiplier):
+def findMoveNegaMaxAlphaBeta(game_state, valid_moves, depth, alpha, beta, turn_multiplier, start_time):
     """
-    Negamax algorithm with alpha-beta pruning to determine the best move.
+    Negamax with alpha-beta pruning and time cutoff.
     """
-    global next_move
-    if depth == 0:
+    global next_move, stop_search
+
+    # Ngắt sớm nếu vượt quá thời gian
+    if time.time() - start_time > TIME_LIMIT:
+        stop_search = True
+        return 0  # Không tính gì nữa
+
+    if depth == 0 or stop_search:
         return turn_multiplier * scoreBoard(game_state)
 
-    # Sort moves to optimize alpha-beta pruning
     valid_moves = orderMoves(game_state, valid_moves)
-
     max_score = -CHECKMATE
+
     for move in valid_moves:
         game_state.makeMove(move)
         next_moves = game_state.getAllValidMoves()
-        score = -findMoveNegaMaxAlphaBeta(game_state, next_moves, depth - 1, -beta, -alpha, -turn_multiplier)
+        score = -findMoveNegaMaxAlphaBeta(game_state, next_moves, depth - 1, -beta, -alpha, -turn_multiplier, start_time)
+        game_state.undoMove()
+
+        if stop_search:
+            break
+
         if score > max_score:
             max_score = score
             if depth == DEPTH:
                 next_move = move
-        game_state.undoMove()
         if max_score > alpha:
             alpha = max_score
-        if alpha >= beta:  # Beta cutoff
+        if alpha >= beta:
             break
+
     return max_score
 
 
